@@ -1,20 +1,20 @@
-# Finetune Mobilenet for Tensorflow.js WebApp
+# TensorFlow.js Static Webapp - Mobilenet Finetuned
 
 This is a simple example of how to finetune a Mobilenet model and use it in a web application using Tensorflow.js. The web application will allow you to upload a picture and classify it using the finetuned model.
 
 
 ## Demo
 
-You can try the web application [here](https://abinthomas.in/mobilenet-tf/) (Hosted on github-pages).
-[![WebApp Demo](demo.gif)](https://abinthomas.in/mobilenet-tf/)
+You can try the web application [here](https://abinthomas.in/tfjs-static-webapp/) (Hosted on github-pages).
+[![WebApp Demo](demo.gif)](https://abinthomas.in/tfjs-static-webapp/)
 
 ## Installation
 
 First, clone the repository and install the required packages:
 
 ```bash
-git clone https://github.com/abinthomasonline/mobilenet-tf.git
-cd finetune-mobilenet-tfjs
+git clone https://github.com/abinthomasonline/tfjs-static-webapp.git
+cd tfjs-static-webapp
 pip install -r requirements.txt
 ```
 
