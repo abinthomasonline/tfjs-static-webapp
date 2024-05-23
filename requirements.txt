@@ -1,0 +1,6 @@
+kaggle
+matplotlib
+scipy
+tensorflow
+tensorflow_hub
+tensorflowjs

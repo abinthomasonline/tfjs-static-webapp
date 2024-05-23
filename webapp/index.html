@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Playing Card Classification with MobileNet</title>
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+</head>
+<body>
+    <h1>Playing Card Classification with MobileNet</h1>
+
+    <!-- Image Upload (Display only after model loading is complete) -->
+    <input type="file" id="imageUpload" accept="image/*" hidden>
+
+    <!-- Prepend all results -->
+    <h2>Results</h2>
+    <div id="results" style="width: 600px; text-align: center;"></div>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const results = document.getElementById('results');
+        const CLASSES = ['clubs', 'diamonds', 'hearts', 'spades'];
+        let model;
+        
+        // Load the model
+        async function loadModel() {
+            model = await tf.loadGraphModel("blessed_model/model.json");
+            console.log('Model loaded');
+            imageUpload.hidden = false;  // Unhide the image upload button
+        }
+        
+        // Inference when an image is uploaded
+        imageUpload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = async () => {
+                        // create figure element
+                        const figure = document.createElement('figure');
+                        const image_element = document.createElement('img');
+                        image_element.src = img.src;
+                        image_element.width = 224;
+                        image_element.height = 224;
+                        figure.appendChild(image_element);
+                        const figcaption = document.createElement('figcaption');
+                        figcaption.textContent = 'Loading...';
+                        figure.appendChild(figcaption);
+                        results.prepend(figure);
+
+                        // Preprocess the image and classify
+                        const processedImage = tf.browser.fromPixels(img)
+                                           .resizeNearestNeighbor([224, 224])
+                                           .toFloat()
+                                           .div(tf.scalar(255.0))
+                                           .expandDims();
+                        const predictions = await model.predict(processedImage);
+                        const top4 = Array.from(predictions.dataSync()).map((p, i) => {
+                            return { probability: p*100, className: CLASSES[i] };
+                        }).sort((a, b) => b.probability - a.probability).slice(0, 4);
+                        
+                        // Display the results, format:- className (probability), e.g. "tennis ball (99.99%)"
+                        figcaption.textContent = top4.map(p => `${p.className} (${p.probability.toFixed(2)}%)`).join(', ');
+
+                        // Dispose the tensor to release the memory
+                        processedImage.dispose();
+                    };
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        loadModel();        
+    </script>
+</body>
+</html>
