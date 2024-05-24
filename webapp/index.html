@@ -8,25 +8,80 @@
 <body>
     <h1>Playing Card Classification with MobileNet</h1>
 
-    <!-- Image Upload (Display only after model loading is complete) -->
-    <input type="file" id="imageUpload" accept="image/*" hidden>
+    <div id="allInputs" hidden>
+        <div>
+            <!-- Radio button to choose between file and webcam -->
+            <input type="radio" id="fileInput" name="inputType" value="file" checked>
+            <label for="fileInput">Upload File</label>
+            <input type="radio" id="webcamInput" name="inputType" value="webcam">
+            <label for="webcamInput">Capture Webcam</label>
+        </div>
+
+        <div style="margin: 20px;">
+            <!-- Image Upload (Display only after model loading is complete) -->
+            <input type="file" id="imageUpload" accept="image/*">
+            <!-- Webcam (Display only after model loading is complete) -->
+            <input type="button" id="webcamButton" value="Start Webcam" hidden>
+            <input type="button" id="webcamCapture" value="Capture" hidden>
+        </div>
+    </div>
+
+    <!-- Display video feed from webcam -->
+    <div id="webcam" style="width: 600px; text-align: center;" hidden></div>
 
     <!-- Prepend all results -->
-    <h2>Results</h2>
+    <h2 id="resultsTitle" hidden>Results</h2>
     <div id="results" style="width: 600px; text-align: center;"></div>
 
     <script>
-        const imageUpload = document.getElementById('imageUpload');
+        let allInputs = document.getElementById('allInputs');
+        let resultsTitle = document.getElementById('resultsTitle');
         const results = document.getElementById('results');
-        const CLASSES = ['clubs', 'diamonds', 'hearts', 'spades'];
+        let webcamButton = document.getElementById('webcamButton');
+        let webcamCapture = document.getElementById('webcamCapture');
+        let videoContainer = document.getElementById('webcam');
+        let imageUpload = document.getElementById('imageUpload');
+
+        // get class names from blessed_model/class_names.json
+        let CLASSES;
+        fetch('blessed_model/class_names.json')
+            .then(response => response.json())
+            .then(data => {
+                CLASSES = data;
+            });
         let model;
         
         // Load the model
         async function loadModel() {
             model = await tf.loadGraphModel("blessed_model/model.json");
             console.log('Model loaded');
-            imageUpload.hidden = false;  // Unhide the image upload button
+            allInputs.hidden = false;  // Unhide the image upload button
         }
+
+        // Show/hide the file/webcam input based on the selection
+        document.querySelectorAll('input[name="inputType"]').forEach((elem) => {
+            elem.addEventListener('change', (event) => {
+                if (event.target.value === 'file') {
+                    imageUpload.hidden = false;
+                    webcamButton.hidden = true;
+                    webcamCapture.hidden = true;
+                    // Remove the video feed
+                    videoContainer.innerHTML = '';
+                    videoContainer.hidden = true;
+                    // turn off the webcam if it is on
+                    if (videoContainer.querySelector('video')) {
+                        videoContainer.querySelector('video').srcObject.getTracks().forEach(track => track.stop());
+                    }
+                } else {
+                    imageUpload.hidden = true;
+                    webcamButton.hidden = false;
+                    webcamCapture.hidden = true;
+                    // Remove the video feed
+                    videoContainer.innerHTML = '';
+                    videoContainer.hidden = true;
+                }
+            });
+        });
         
         // Inference when an image is uploaded
         imageUpload.addEventListener('change', async (event) => {
@@ -47,8 +102,7 @@
                         const figcaption = document.createElement('figcaption');
                         figcaption.textContent = 'Loading...';
                         figure.appendChild(figcaption);
-                        results.prepend(figure);
-
+                        
                         // Preprocess the image and classify
                         const processedImage = tf.browser.fromPixels(img)
                                            .resizeNearestNeighbor([224, 224])
@@ -56,19 +110,82 @@
                                            .div(tf.scalar(255.0))
                                            .expandDims();
                         const predictions = await model.predict(processedImage);
-                        const top4 = Array.from(predictions.dataSync()).map((p, i) => {
+                        const top = Array.from(predictions.dataSync()).map((p, i) => {
                             return { probability: p*100, className: CLASSES[i] };
-                        }).sort((a, b) => b.probability - a.probability).slice(0, 4);
+                        }).sort((a, b) => b.probability - a.probability);
+
+                        // Display the results title if hidden
+                        resultsTitle.hidden = false;
                         
                         // Display the results, format:- className (probability), e.g. "tennis ball (99.99%)"
-                        figcaption.textContent = top4.map(p => `${p.className} (${p.probability.toFixed(2)}%)`).join(', ');
+                        figcaption.textContent = top.map(p => `${p.className} (${p.probability.toFixed(2)}%)`).join(', ');
 
                         // Dispose the tensor to release the memory
                         processedImage.dispose();
+
+                        results.prepend(figure);
                     };
                 };
                 reader.readAsDataURL(file);
             }
+        });
+
+        // Start webcam when the button is clicked
+        webcamButton.addEventListener('click', async () => {
+            videoContainer.hidden = false;
+            webcamButton.hidden = true;
+            webcamCapture.hidden = false;
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.createElement('video');
+            video.height = 224;
+            // video.width = 224;
+            videoContainer.appendChild(video);
+            video.srcObject = stream;
+            await video.play();
+        });
+        // Capture the image from the webcam
+        webcamCapture.addEventListener('click', async () => {
+            const video = videoContainer.querySelector('video');
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            const captureCanvasCtx = captureCanvas.getContext('2d');
+
+            const figure = document.createElement('figure');
+            let image_element = document.createElement('img');
+            image_element.width = 224;
+            image_element.height = 224;
+            figure.appendChild(image_element);
+            const figcaption = document.createElement('figcaption');
+            figure.appendChild(figcaption);
+
+            captureCanvasCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            const img = new Image();
+            img.src = captureCanvas.toDataURL('image/jpeg');
+            img.onload = async () => {
+                image_element.src = img.src;
+                figcaption.textContent = 'Loading...';
+                const processedImage = tf.browser.fromPixels(img)
+                                   .resizeNearestNeighbor([224, 224])
+                                   .toFloat()
+                                   .div(tf.scalar(255.0))
+                                   .expandDims();
+                const predictions = await model.predict(processedImage);
+                const top = Array.from(predictions.dataSync()).map((p, i) => {
+                    return { probability: p*100, className: CLASSES[i] };
+                }).sort((a, b) => b.probability - a.probability);
+
+                // Display the results title if hidden
+                resultsTitle.hidden = false;
+                
+                // Display the results, format:- className (probability), e.g. "tennis ball (99.99%)"
+                figcaption.textContent = top.map(p => `${p.className} (${p.probability.toFixed(2)}%)`).join(', ');
+
+                // Dispose the tensor to release the memory
+                processedImage.dispose();
+
+                results.prepend(figure);
+            };
         });
         loadModel();        
     </script>
